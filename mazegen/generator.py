@@ -1,6 +1,6 @@
 # mazegen/generator.py
 import random
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Set
 from collections import deque
 
 class MazeGenerator:
@@ -13,6 +13,7 @@ class MazeGenerator:
         self.grid: List[List[int]] = [[15 for _ in range(width)] for _ in range(height)]
         self.visited: List[List[bool]] = [[False for _ in range(width)] for _ in range(height)]
         self.solution_path: str = ""
+        self.protected_cells: Set[Tuple[int, int]] = set()
 
     def _carve_42(self) -> None:
         if self.width < 10 or self.height < 8:
@@ -37,6 +38,7 @@ class MazeGenerator:
             if 0 <= x < self.width and 0 <= y < self.height:
                 self.visited[y][x] = True
                 self.grid[y][x] = 15
+                self.protected_cells.add((x, y))
 
     def _carve_passages_from(self, cx: int, cy: int) -> None:
         self.visited[cy][cx] = True
@@ -49,6 +51,24 @@ class MazeGenerator:
                 self.grid[cy][cx] &= ~wall
                 self.grid[ny][nx] &= ~opposite_wall
                 self._carve_passages_from(nx, ny)
+
+    def _make_imperfect(self) -> None:
+        num_walls_to_remove = (self.width * self.height) // 10
+        for _ in range(num_walls_to_remove):
+            x = random.randint(1, self.width - 2)
+            y = random.randint(1, self.height - 2)
+            
+            if (x, y) in self.protected_cells:
+                continue
+                
+            if random.choice([True, False]):
+                nx, ny, wall, opp = x + 1, y, 2, 8
+            else:
+                nx, ny, wall, opp = x, y + 1, 4, 1
+                
+            if (nx, ny) not in self.protected_cells:
+                self.grid[y][x] &= ~wall
+                self.grid[ny][nx] &= ~opp
 
     def solve_bfs(self, start: Tuple[int, int], end: Tuple[int, int]) -> None:
         queue = deque([(start[0], start[1], "")])
@@ -71,6 +91,10 @@ class MazeGenerator:
     def generate(self, entry: Tuple[int, int], exit_coords: Tuple[int, int]) -> None:
         self._carve_42()
         self._carve_passages_from(entry[0], entry[1])
+        
+        if not self.perfect:
+            self._make_imperfect()
+            
         self.solve_bfs(entry, exit_coords)
 
     def save_to_file(self, filename: str, entry: Tuple[int, int], exit_coords: Tuple[int, int]) -> None:
